@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Marvel Rivals Season 9.5 Hero Spinner</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080a10;color:#fff;font-family:Arial,sans-serif;text-align:center}
+.wrap{max-width:1050px;margin:auto;padding:25px 15px}h1{font-size:clamp(28px,5vw,48px);margin:0 0 5px}
+.sub{color:#aeb6c8;margin-bottom:18px}.controls{display:flex;gap:9px;justify-content:center;flex-wrap:wrap;margin-bottom:18px}
+button,select{background:#202638;color:#fff;border:0;border-radius:10px;padding:11px 15px;font-size:15px;cursor:pointer}
+#spin{background:#e33455;font-weight:bold;font-size:18px;padding:13px 28px}button:hover{filter:brightness(1.2)}
+button:disabled{opacity:.4;cursor:not-allowed;filter:none}
+.wheel{position:relative;width:min(680px,94vw);aspect-ratio:1;margin:auto}
+canvas{width:100%;height:100%;border-radius:50%;box-shadow:0 0 0 5px #181c28,0 15px 60px #000}
+.pointer{position:absolute;top:-2px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:20px solid transparent;border-right:20px solid transparent;border-top:42px solid white;filter:drop-shadow(0 2px 4px #000)}
+.result{height:75px;margin-top:20px;font-size:27px;font-weight:bold}.result small{display:block;color:#aeb6c8;font-size:14px;margin-top:5px}
+.count{color:#8f98ac;margin:4px 0 15px}.list{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:6px;text-align:left}
+.hero{background:#151925;padding:8px 10px;border-radius:7px;font-size:13px}.hero span{color:#9099ad}
+.hero.gone{opacity:.35;text-decoration:line-through}
+</style></head>
+<body><div class="wrap">
+<h1>Marvel Rivals — SPINNER</h1>
+<div class="sub" id="sub">Random hero spinner</div>
+<div class="controls">
+<select id="role"><option>All Roles</option><option>Vanguard</option><option>Duelist</option><option>Strategist</option></select>
+<button id="spin">🎲 SPIN</button><button id="reset">Reset</button>
+</div>
+<div class="count" id="count"></div>
+<div class="wheel"><canvas id="c" width="900" height="900"></canvas><div class="pointer"></div></div>
+<div class="result" id="result">Spin the wheel!</div>
+<div class="list" id="list"></div>
+</div>
+<script>
+const all=[{"name": "Adam Warlock", "role": "Strategist"}, {"name": "Black Panther", "role": "Duelist"}, {"name": "Black Widow", "role": "Duelist"}, {"name": "Captain America", "role": "Vanguard"}, {"name": "Cloak & Dagger", "role": "Strategist"}, {"name": "Doctor Strange", "role": "Vanguard"},{"name": "Gorr", "role": "Duelist"}, {"name": "Groot", "role": "Vanguard"}, {"name": "Hawkeye", "role": "Duelist"}, {"name": "Hela", "role": "Duelist"}, {"name": "Hulk", "role": "Vanguard"}, {"name": "Iron Fist", "role": "Duelist"}, {"name": "Iron Man", "role": "Duelist"}, {"name": "Jeff the Land Shark", "role": "Strategist"}, {"name": "Loki", "role": "Strategist"}, {"name": "Luna Snow", "role": "Strategist"}, {"name": "Magik", "role": "Duelist"}, {"name": "Magneto", "role": "Vanguard"}, {"name": "Mantis", "role": "Strategist"}, {"name": "Moon Knight", "role": "Duelist"}, {"name": "Namor", "role": "Duelist"}, {"name": "Peni Parker", "role": "Vanguard"}, {"name": "Psylocke", "role": "Duelist"}, {"name": "The Punisher", "role": "Duelist"}, {"name": "Rocket Raccoon", "role": "Strategist"}, {"name": "Scarlet Witch", "role": "Duelist"}, {"name": "Spider-Man", "role": "Duelist"}, {"name": "Squirrel Girl", "role": "Duelist"}, {"name": "Star-Lord", "role": "Duelist"}, {"name": "Storm", "role": "Duelist"}, {"name": "Thor", "role": "Vanguard"}, {"name": "Venom", "role": "Vanguard"}, {"name": "Winter Soldier", "role": "Duelist"}, {"name": "Wolverine", "role": "Duelist"}, {"name": "Mister Fantastic", "role": "Duelist"}, {"name": "Invisible Woman", "role": "Strategist"}, {"name": "Human Torch", "role": "Duelist"}, {"name": "The Thing", "role": "Vanguard"}, {"name": "Emma Frost", "role": "Vanguard"}, {"name": "Ultron", "role": "Strategist"}, {"name": "Phoenix", "role": "Duelist"}, {"name": "Blade", "role": "Duelist"}, {"name": "Angela", "role": "Vanguard"}, {"name": "Daredevil", "role": "Duelist"}, {"name": "Gambit", "role": "Strategist"}, {"name": "Rogue", "role": "Vanguard"}, {"name": "Deadpool", "role": "Vanguard"}, {"name": "Elsa Bloodstone", "role": "Duelist"}, {"name": "White Fox", "role": "Strategist"}, {"name": "Black Cat", "role": "Duelist"}, {"name": "Devil Dinosaur", "role": "Vanguard"}, {"name": "Cyclops", "role": "Duelist"}, {"name": "Jubilee", "role": "Strategist"}, {"name": "The Hood", "role": "Vanguard"}];
+const c=document.getElementById('c'),x=c.getContext('2d'),role=document.getElementById('role');
+const result=document.getElementById('result'),list=document.getElementById('list'),count=document.getElementById('count');
+const spinBtn=document.getElementById('spin');
+let rotation=0,busy=false,current=all.slice();
+let removed=new Set(); // names removed after being landed on
+const colours=['#e63946','#457b9d','#f4a261','#2a9d8f','#9b5de5','#f72585','#43aa8b','#577590','#f94144','#90be6d','#277da1','#f3722c'];
+
+function getList(){
+ let pool=role.value==='All Roles'?all:all.filter(h=>h.role===role.value);
+ return pool.filter(h=>!removed.has(h.name));
+}
+function draw(){
+ current=getList();let n=current.length,a=2*Math.PI/n;
+ x.clearRect(0,0,900,900);
+ if(n===0){
+   x.fillStyle='#0b0e16';x.beginPath();x.arc(450,450,425,0,2*Math.PI);x.fill();
+   x.fillStyle='#8f98ac';x.font='bold 26px Arial';x.textAlign='center';
+   x.fillText('No heroes left — Reset to refill',450,455);
+ }else{
+   for(let i=0;i<n;i++){
+     let s=rotation+i*a-Math.PI/2;
+     x.beginPath();x.moveTo(450,450);x.arc(450,450,425,s,s+a);x.closePath();
+     x.fillStyle=colours[i%colours.length];x.fill();x.strokeStyle='#0a0c12';x.lineWidth=2;x.stroke();
+     x.save();x.translate(450,450);x.rotate(s+a/2);x.textAlign='right';x.fillStyle='#fff';
+     x.font='bold '+Math.max(11,Math.min(17,390/n))+'px Arial';
+     x.fillText(current[i].name,412,5);x.restore();
+   }
+   x.beginPath();x.arc(450,450,58,0,2*Math.PI);x.fillStyle='#0b0e16';x.fill();
+   x.fillStyle='#fff';x.font='bold 18px Arial';x.textAlign='center';x.fillText('RIVALS',450,456);
+ }
+ count.textContent=current.length+' heroes on the wheel'+(removed.size?' • '+removed.size+' removed':'');
+ spinBtn.disabled=(n===0);
+ // show full pool for the current role filter, marking removed ones as struck-through
+ let poolForDisplay=role.value==='All Roles'?all:all.filter(h=>h.role===role.value);
+ list.innerHTML=poolForDisplay.map(h=>'<div class="hero'+(removed.has(h.name)?' gone':'')+'"><b>'+h.name+'</b><br><span>'+h.role+'</span></div>').join('');
+}
+function spin(){
+ if(busy)return; current=getList(); if(!current.length)return; busy=true;result.textContent='Spinning…';
+ let winner=Math.floor(Math.random()*current.length),a=2*Math.PI/current.length;
+ let desired=-(winner*a+a/2), norm=((rotation%(2*Math.PI))+2*Math.PI)%(2*Math.PI),delta=desired-norm;
+ while(delta<0)delta+=2*Math.PI;
+ let start=rotation,total=delta+(6+Math.floor(Math.random()*3))*2*Math.PI,t0=performance.now(),dur=4300;
+ function anim(t){
+   let p=Math.min(1,(t-t0)/dur),e=1-Math.pow(1-p,4);rotation=start+total*e;
+   // redraw wheel geometry only (don't call draw(), which recomputes current/getList each frame)
+   let n=current.length,aa=2*Math.PI/n;
+   x.clearRect(0,0,900,900);
+   for(let i=0;i<n;i++){
+     let s=rotation+i*aa-Math.PI/2;
+     x.beginPath();x.moveTo(450,450);x.arc(450,450,425,s,s+aa);x.closePath();
+     x.fillStyle=colours[i%colours.length];x.fill();x.strokeStyle='#0a0c12';x.lineWidth=2;x.stroke();
+     x.save();x.translate(450,450);x.rotate(s+aa/2);x.textAlign='right';x.fillStyle='#fff';
+     x.font='bold '+Math.max(11,Math.min(17,390/n))+'px Arial';
+     x.fillText(current[i].name,412,5);x.restore();
+   }
+   x.beginPath();x.arc(450,450,58,0,2*Math.PI);x.fillStyle='#0b0e16';x.fill();
+   x.fillStyle='#fff';x.font='bold 18px Arial';x.textAlign='center';x.fillText('RIVALS',450,456);
+   if(p<1)requestAnimationFrame(anim);
+   else{
+     busy=false;
+     let landed=current[winner];
+     result.innerHTML='🎯 '+landed.name+'<small>'+landed.role+'</small>';
+     removed.add(landed.name); // delete the landed-on hero from future spins
+     rotation=0; // reset spin position so the shrunken wheel starts clean
+     draw();
+   }
+ }
+ requestAnimationFrame(anim);
+}
+document.getElementById('spin').onclick=spin;
+document.getElementById('reset').onclick=()=>{
+ rotation=0;
+ removed.clear(); // bring all characters back
+ result.textContent='Spin the wheel!';
+ draw();
+};
+role.onchange=()=>{result.textContent='Spin the wheel!';draw()};
+document.getElementById('sub').textContent='Random hero spinner • all '+all.length+' heroes';
+draw();
+</script></body></html>
